@@ -61,12 +61,13 @@ void getcmd(const Block *block, char *output)
 {
 	//make sure status is same until output is ready
 	char tempstatus[CMDLENGTH] = {0};
+	int pos = 0;
 	if (block->signal)
 	{
-		tempstatus[0] = block->signal;
-		tempstatus++;
+		tempstatus[pos] = block->signal;
+		pos++;
 	}
-	strcpy(tempstatus, block->icon);
+	strcpy(tempstatus+pos, block->icon);
 	FILE *cmdf;
 	if (*button)
 	{
@@ -81,7 +82,7 @@ void getcmd(const Block *block, char *output)
 	}
 	if (!cmdf)
 		return;
-	int i = strlen(block->icon);
+	int i = strlen(block->icon)+pos;
 	fgets(tempstatus+i, CMDLENGTH-i-delimLen, cmdf);
 	i = strlen(tempstatus);
 	//if block and command output are both not empty

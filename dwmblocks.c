@@ -28,6 +28,7 @@ typedef struct {
 void dummysighandler(int num);
 #endif
 void sighandler(int num);
+void buttonhandler(int sig, siginfo_t *si, void *ucontext);
 void getcmds(int time);
 void getsigcmds(unsigned int signal);
 void setupsignals();
@@ -47,11 +48,11 @@ static Window root;
 static void (*writestatus) () = pstdout;
 #endif
 
-
 #include "blocks.h"
 
 static char statusbar[LENGTH(blocks)][CMDLENGTH] = {0};
 static char statusstr[2][STATUSLENGTH];
+static char button[] = "\0";
 static int statusContinue = 1;
 static int returnStatus = 0;
 
@@ -60,8 +61,24 @@ void getcmd(const Block *block, char *output)
 {
 	//make sure status is same until output is ready
 	char tempstatus[CMDLENGTH] = {0};
+	if (block->signal)
+	{
+		tempstatus[0] = block->signal;
+		tempstatus++;
+	}
 	strcpy(tempstatus, block->icon);
-	FILE *cmdf = popen(block->command, "r");
+	FILE *cmdf;
+	if (*button)
+	{
+		setenv("BUTTON", button, 1);
+		cmdf = popen(block->command,"r");
+		*button = '\0';
+		unsetenv("BUTTON");
+	}
+	else
+	{
+		cmdf = popen(block->command,"r");
+	}
 	if (!cmdf)
 		return;
 	int i = strlen(block->icon);
@@ -109,9 +126,15 @@ void setupsignals()
         signal(i, dummysighandler);
 #endif
 
+	struct sigaction sa;
 	for (unsigned int i = 0; i < LENGTH(blocks); i++) {
-		if (blocks[i].signal > 0)
+		if (blocks[i].signal > 0) {
 			signal(SIGMINUS+blocks[i].signal, sighandler);
+			sigaddset(&sa.sa_mask, SIGRTMIN+blocks[i].signal); // ignore signal when handling SIGUSR1
+		}
+		sa.sa_sigaction = buttonhandler;
+		sa.sa_flags = SA_SIGINFO;
+		sigaction(SIGUSR1, &sa, NULL);
 	}
 
 }
@@ -176,6 +199,13 @@ void statusloop()
 void dummysighandler(int signum)
 {
     return;
+}
+
+void buttonhandler(int sig, siginfo_t *si, void *ucontext)
+{
+	*button = '0' + si->si_value.sival_int & 0xff;
+	getsigcmds(si->si_value.sival_int >> 8);
+	writestatus();
 }
 #endif
 
